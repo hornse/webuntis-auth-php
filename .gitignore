@@ -1,0 +1,10 @@
+# Konfiguration (enthält Passwörter – NIE in git!)
+config.php
+
+# macOS
+.DS_Store
+**/.DS_Store
+
+# IDEs
+.idea/
+.vscode/
