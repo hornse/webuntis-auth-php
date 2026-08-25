@@ -259,7 +259,7 @@ class WebUntisAuth
      * @param bool $saveCookie  Beim ersten Aufruf (authenticate) true setzen
      *                          um JSESSIONID aus Set-Cookie zu speichern
      */
-    private function jsonRpc(string $method, array $params, bool $saveCookie = false): ?array
+    protected function jsonRpc(string $method, array $params, bool $saveCookie = false): ?array
     {
         $baseUrl = rtrim($this->config['base_url'], '/');
 

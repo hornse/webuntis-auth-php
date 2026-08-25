@@ -13,6 +13,10 @@ Nennenswerte Änderungen an diesem Modul, mit Begründung wo nötig.
   `logout()` auf, setzte das interne Sitzungs-Cookie aber nicht zurück.
   Ohne den neuen Schalter folgenlos, mit ihm hätte eine abgewiesene
   Anmeldung eine scheinbar gültige Sitzung hinterlassen.
+- `jsonRpc()` von `private` auf `protected`: ein Test-Doppel kann die
+  Methode jetzt überschreiben, `authenticate()` lässt sich ohne
+  Netzzugriff prüfen. Neues `tests/WebUntisAuthTest.php` mit vier
+  Prüfungen rund um `sitzung_offen_halten` und `sessionCookie()`.
 
 ## 1.0.0 – 2026-07-09
 
