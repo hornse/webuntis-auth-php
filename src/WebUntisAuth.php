@@ -122,7 +122,10 @@ class WebUntisAuth
         // Erlaubte personTypes prüfen
         $erlaubt = $this->config['allowed_person_types'] ?? [self::TYPE_LEHRER];
         if (!in_array($personType, $erlaubt, true)) {
+            // Abgemeldet und zurückgesetzt unabhängig vom Schalter: eine
+            // abgewiesene Anmeldung darf keine Sitzung hinterlassen.
             $this->jsonRpc('logout', []);
+            $this->sessionCookie = '';
             $this->log($username, false, 'falsche_rolle', $ip);
             return null;
         }
