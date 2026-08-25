@@ -3,13 +3,14 @@
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![PHP: 8.1+](https://img.shields.io/badge/PHP-8.1+-blue.svg)](https://php.net)
 
+**Version:** 1.1.0
+
 Wiederverwendbares PHP-Modul zur Authentifizierung gegen die WebUntis
 JSON-RPC-API. Unterstützt Lehrkräfte, WebUntis-Administratoren und Schüler.
 Ohne externe Abhängigkeiten – nur PHP 8.1+, PDO und cURL.
 
-Entwickelt an der Friedrich-Rückert-Gymnasium Düsseldorf und eingesetzt in
-[Projektstunden NRW](https://github.com/hornse/projektstunden) und
-[Schulprozesse](https://github.com/hornse/schulprozesse).
+Entwickelt an der Friedrich-Rückert-Gymnasium Düsseldorf. Nutzer ist bisher
+keiner – die Anbindung an ein erstes Projekt steht noch aus.
 
 ---
 
@@ -171,6 +172,10 @@ $result = $wu->authenticate(string $username, string $password, string $ip): ?ar
 
 // Prüfen ob gesperrt
 $gesperrt = $wu->isLocked(string $username): bool;
+
+// JSESSIONID der WebUntis-Sitzung – nur mit 'sitzung_offen_halten' => true
+// und nach erfolgreicher Anmeldung, sonst null:
+$cookie = $wu->sessionCookie(): ?string;
 ```
 
 ### `WebUntisSession`

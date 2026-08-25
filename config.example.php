@@ -36,6 +36,13 @@ return [
         // ── Brute-Force-Schutz ───────────────────────────────────────────────
         'max_failed_logins' => 5,  // Versuche bevor gesperrt
         'lockout_minutes'   => 15, // Sperrzeit in Minuten
+
+        // ── Sitzung offenhalten ──────────────────────────────────────────────
+        // Im Normalfall aus: authenticate() meldet die WebUntis-Sitzung nach
+        // dem Holen der Profildaten selbst wieder ab. Nur einschalten, wenn
+        // die Sitzung darüber hinaus gebraucht wird (z.B. für weitere
+        // JSON-RPC-Aufrufe) – dann liefert sessionCookie() die JSESSIONID.
+        'sitzung_offen_halten' => false,
     ],
 
     'session' => [

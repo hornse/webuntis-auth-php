@@ -57,6 +57,9 @@ class WebUntisAuth
     /** Interner Session-Cookie für Folgeaufrufe nach authenticate */
     private string $sessionCookie = '';
 
+    /** Ob authenticate() die WebUntis-Sitzung im Erfolgsfall offenlässt */
+    private readonly bool $sitzungOffenHalten;
+
     /**
      * @param PDO   $db      Datenbankverbindung (für Login-Log und Brute-Force)
      * @param array $config  WebUntis-Konfiguration (siehe config.example.php)
@@ -64,7 +67,9 @@ class WebUntisAuth
     public function __construct(
         private readonly PDO   $db,
         private readonly array $config
-    ) {}
+    ) {
+        $this->sitzungOffenHalten = (bool)($config['sitzung_offen_halten'] ?? false);
+    }
 
     // ── Öffentliche API ─────────────────────────────────────────────────────
 
@@ -125,9 +130,11 @@ class WebUntisAuth
         // Profildaten mit aktiver Session holen
         $details = $this->fetchDetails($username, $personType, $personId);
 
-        // Session freigeben
-        $this->jsonRpc('logout', []);
-        $this->sessionCookie = '';
+        // Session freigeben – außer sie soll ausdrücklich offenbleiben
+        if (!$this->sitzungOffenHalten) {
+            $this->jsonRpc('logout', []);
+            $this->sessionCookie = '';
+        }
         $this->log($username, true, null, $ip);
 
         return $details;
@@ -139,6 +146,21 @@ class WebUntisAuth
     public function isLocked(string $username): bool
     {
         return $this->tooManyAttempts(trim($username));
+    }
+
+    /**
+     * JSESSIONID der laufenden WebUntis-Sitzung.
+     *
+     * Liefert nur dann einen Wert, wenn 'sitzung_offen_halten' gesetzt ist
+     * und die Anmeldung erfolgreich war — sonst null. Ohne den Schalter
+     * meldet authenticate() die Sitzung selbst wieder ab.
+     *
+     * Der Wert ist ein Zugangsdatum: nicht protokollieren, nicht in
+     * Berichte, nicht in URL-Parameter.
+     */
+    public function sessionCookie(): ?string
+    {
+        return $this->sessionCookie !== '' ? $this->sessionCookie : null;
     }
 
     // ── Profildaten ─────────────────────────────────────────────────────────
