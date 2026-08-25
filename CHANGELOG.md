@@ -16,6 +16,11 @@ durchgelassen.
   MariaDB funktioniert. Wirft die Zählabfrage einen Fehler (z.B. weil die
   Tabelle `webuntis_login_log` noch fehlt), sperrt sie jetzt statt
   durchzulassen, und meldet das im Fehlerprotokoll.
+- `log()` gibt zurück, ob der Eintrag gelungen ist. Scheitert das
+  Vermerken eines **Fehlversuchs**, weist `authenticate()` ab – eine
+  Bremse, die nicht zählen kann, ist keine. Beim erfolgreichen Login
+  bleibt der Eintrag reines Protokoll: Scheitert er, wird trotzdem
+  durchgelassen.
 
 ## 1.1.0 – 2026-08-25
 

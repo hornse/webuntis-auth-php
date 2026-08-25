@@ -99,6 +99,9 @@ class WebUntisAuth
 
         // Brute-Force-Schutz
         if ($this->tooManyAttempts($username)) {
+            // Fehlversuch: log() entscheidet nichts, da hier ohnehin
+            // abgewiesen wird – aber genau das ist der Fehlversuch, den die
+            // Bremse für ihre Zählung braucht.
             $this->log($username, false, 'zu_viele_versuche', $ip);
             return null;
         }
@@ -111,7 +114,12 @@ class WebUntisAuth
         ], saveCookie: true);
 
         if ($authResponse === null || isset($authResponse['error'])) {
-            $this->log($username, false, 'falsches_passwort_oder_netzwerk', $ip);
+            // Fehlversuch ist hier Voraussetzung, nicht nur Protokoll: lässt
+            // er sich nicht eintragen, wird trotzdem abgewiesen (siehe
+            // log()) – anders als beim Erfolg weiter unten.
+            if (!$this->log($username, false, 'falsches_passwort_oder_netzwerk', $ip)) {
+                return null;
+            }
             return null;
         }
 
@@ -126,7 +134,7 @@ class WebUntisAuth
             // abgewiesene Anmeldung darf keine Sitzung hinterlassen.
             $this->jsonRpc('logout', []);
             $this->sessionCookie = '';
-            $this->log($username, false, 'falsche_rolle', $ip);
+            $this->log($username, false, 'falsche_rolle', $ip); // Fehlversuch – wird so oder so abgewiesen
             return null;
         }
 
@@ -138,6 +146,8 @@ class WebUntisAuth
             $this->jsonRpc('logout', []);
             $this->sessionCookie = '';
         }
+        // Erfolg: der Eintrag ist Protokoll, keine Voraussetzung – scheitert
+        // er, wird trotzdem durchgelassen (anders als beim Fehlversuch oben).
         $this->log($username, true, null, $ip);
 
         return $details;
@@ -353,16 +363,26 @@ class WebUntisAuth
 
     /**
      * Protokolliert einen Login-Versuch.
+     *
+     * Ein Fehlversuch ist für die Bremse Voraussetzung, nicht nur Protokoll:
+     * lässt er sich nicht eintragen, zählt tooManyAttempts() ins Leere.
+     * Deshalb weist der Aufrufer bei einem Fehlversuch ab, wenn hier `false`
+     * zurückkommt. Ein erfolgreicher Login dagegen wird nur protokolliert –
+     * scheitert der Eintrag, ändert das nichts am Ausgang der Anmeldung.
+     *
+     * @return bool  Ob der Eintrag gelungen ist.
      */
-    private function log(string $username, bool $ok, ?string $grund, string $ip): void
+    private function log(string $username, bool $ok, ?string $grund, string $ip): bool
     {
         try {
             $this->db->prepare(
                 'INSERT INTO webuntis_login_log (benutzername, erfolgreich, grund, ip)
                  VALUES (?, ?, ?, ?)'
             )->execute([$username, $ok ? 1 : 0, $grund, $ip]);
+            return true;
         } catch (\Throwable $e) {
             error_log('WebUntisAuth log: ' . $e->getMessage());
+            return false;
         }
     }
 }

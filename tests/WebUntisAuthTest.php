@@ -74,6 +74,19 @@ function neueTestDbOhneTabelle(): PDO
     return $db;
 }
 
+/**
+ * Tabelle vorhanden – die Zählabfrage (SELECT) funktioniert – aber
+ * schreibgeschützt: das Eintragen (INSERT) scheitert. Bildet nach, dass die
+ * Zählabfrage und das Eintragen unabhängig voneinander scheitern können
+ * (z.B. eine schreibgeschützte Replik).
+ */
+function neueSchreibgeschuetzteTestDb(): PDO
+{
+    $db = neueTestDb();
+    $db->exec('PRAGMA query_only = ON');
+    return $db;
+}
+
 /** @return array{result: array} Nachgebaute WebUntis-Antwort auf 'authenticate'. */
 function antwortLehrer(): array
 {
@@ -95,6 +108,10 @@ $antwortenLehrer = [
 $antwortenSchueler = [
     'authenticate' => antwortSchueler(),
     'logout'       => ['result' => null],
+];
+
+$antwortenFalschesPasswort = [
+    'authenticate' => ['error' => ['code' => -8991, 'message' => 'Wrong username or password.']],
 ];
 
 $bestanden = 0;
@@ -173,6 +190,36 @@ pruefe(
     '5) Zählabfrage scheitert (Tabelle fehlt): authenticate() weist ab, keine Profildaten',
     $res5 === null,
     'authenticate()=' . var_export($res5, true)
+);
+
+// ── Prüfung 6: log() meldet einen Fehlschlag zurück ──────────────────────────
+// Tabelle vorhanden (Zählabfrage funktioniert), aber schreibgeschützt: das
+// Eintragen scheitert unabhängig von der Zählabfrage. Fehlversuch → log()
+// liefert false und authenticate() weist ab; Erfolg → log() liefert
+// ebenfalls false, aber authenticate() weist NICHT ab (Protokoll, keine
+// Voraussetzung).
+// Seit PHP 8.1 kein setAccessible(true) mehr nötig, um eine private
+// Methode über Reflection aufzurufen.
+$logMethode = new ReflectionMethod(WebUntisAuth::class, 'log');
+
+$dbLog            = neueSchreibgeschuetzteTestDb();
+$wuLog            = new JsonRpcTestDouble($dbLog, [], []);
+$logEintragScheitert = $logMethode->invoke($wuLog, 'ho', false, 'falsches_passwort_oder_netzwerk', '127.0.0.1');
+
+$db6a = neueSchreibgeschuetzteTestDb();
+$wu6a = new JsonRpcTestDouble($db6a, ['allowed_person_types' => [WebUntisAuth::TYPE_LEHRER]], $antwortenFalschesPasswort);
+$res6a = $wu6a->authenticate('ho', 'falsch', '127.0.0.1');
+
+$db6b = neueSchreibgeschuetzteTestDb();
+$wu6b = new JsonRpcTestDouble($db6b, ['allowed_person_types' => [WebUntisAuth::TYPE_LEHRER]], $antwortenLehrer);
+$res6b = $wu6b->authenticate('ho', 'geheim', '127.0.0.1');
+
+pruefe(
+    '6) log() scheitert (Tabelle schreibgeschützt): Fehlversuch weist ab, Erfolg nicht',
+    $logEintragScheitert === false && $res6a === null && $res6b !== null,
+    'log()=' . var_export($logEintragScheitert, true)
+        . ' res6a=' . var_export($res6a, true)
+        . ' res6b=' . var_export($res6b, true)
 );
 
 echo "\nPrüfungen: {$gesamt}, bestanden: {$bestanden}\n";
