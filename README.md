@@ -3,7 +3,7 @@
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![PHP: 8.1+](https://img.shields.io/badge/PHP-8.1+-blue.svg)](https://php.net)
 
-**Version:** 1.1.0
+**Version:** 1.2.0
 
 Wiederverwendbares PHP-Modul zur Authentifizierung gegen die WebUntis
 JSON-RPC-API. Unterstützt Lehrkräfte, WebUntis-Administratoren und Schüler.

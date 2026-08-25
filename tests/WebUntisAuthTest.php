@@ -66,6 +66,14 @@ function neueTestDb(): PDO
     return $db;
 }
 
+/** In-Memory-SQLite ganz ohne webuntis_login_log – bildet den ersten Deploy vor der Migration nach. */
+function neueTestDbOhneTabelle(): PDO
+{
+    $db = new PDO('sqlite::memory:');
+    $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+    return $db;
+}
+
 /** @return array{result: array} Nachgebaute WebUntis-Antwort auf 'authenticate'. */
 function antwortLehrer(): array
 {
@@ -152,6 +160,19 @@ pruefe(
     '4) mit Schalter, unerlaubte Rolle: authenticate() null, sessionCookie() null',
     $res4 === null && $wu4->sessionCookie() === null,
     'authenticate()=' . var_export($res4, true) . ' sessionCookie()=' . var_export($wu4->sessionCookie(), true)
+);
+
+// ── Prüfung 5: Zählabfrage wirft Fehler (Tabelle fehlt) ──────────────────────
+// Der Fall aus der Wirklichkeit: erster Deploy vor migration.sql. Sowohl
+// tooManyAttempts() als auch log() scheitern hier – gilt für authenticate(),
+// nicht sperren wäre hier das gefährlichere Verhalten.
+$db5  = neueTestDbOhneTabelle();
+$wu5  = new JsonRpcTestDouble($db5, ['allowed_person_types' => [WebUntisAuth::TYPE_LEHRER]], $antwortenLehrer);
+$res5 = $wu5->authenticate('ho', 'geheim', '127.0.0.1');
+pruefe(
+    '5) Zählabfrage scheitert (Tabelle fehlt): authenticate() weist ab, keine Profildaten',
+    $res5 === null,
+    'authenticate()=' . var_export($res5, true)
 );
 
 echo "\nPrüfungen: {$gesamt}, bestanden: {$bestanden}\n";

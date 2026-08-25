@@ -335,16 +335,19 @@ class WebUntisAuth
         $max     = $this->config['max_failed_logins'] ?? 5;
         $minutes = $this->config['lockout_minutes']   ?? 15;
 
+        $seit = (new \DateTimeImmutable("-{$minutes} minutes"))->format('Y-m-d H:i:s');
+
         try {
             $stmt = $this->db->prepare(
                 'SELECT COUNT(*) FROM webuntis_login_log
                  WHERE benutzername = ? AND erfolgreich = 0
-                   AND zeitpunkt >= DATE_SUB(NOW(), INTERVAL ? MINUTE)'
+                   AND zeitpunkt >= ?'
             );
-            $stmt->execute([$username, $minutes]);
+            $stmt->execute([$username, $seit]);
             return (int)$stmt->fetchColumn() >= $max;
-        } catch (\Throwable) {
-            return false; // Bei Fehler nicht sperren
+        } catch (\Throwable $e) {
+            error_log('WebUntisAuth Bremse: ' . $e->getMessage());
+            return true; // Voraussetzung fehlt → im Zweifel abweisen
         }
     }
 
