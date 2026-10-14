@@ -34,9 +34,9 @@
  *     → Name muss aus DB oder Fallback kommen
  *   - Session-Cookie braucht JSESSIONID aus Set-Cookie-Header
  *     → jsonRpc() speichert Cookie intern für Folgeaufrufe
- *   - Hinter SSL-Proxy (z.B. Uberspace): session_name() und
- *     $_SERVER['HTTPS'] = 'on' müssen im Router ganz oben stehen
- *     (vor jedem require) – siehe WebUntisSession::prepare()
+ *   - session_name() muss im Router ganz oben stehen (vor jedem
+ *     require) – siehe WebUntisSession::prepare(). Die Cookie-Flags
+ *     setzt allein WebUntisSession::start(), nicht $_SERVER['HTTPS'].
  *
  * Copyright (C) 2026 Sebastian Horn, Friedrich-Rückert-Gymnasium Düsseldorf
  * SPDX-License-Identifier: GPL-3.0-or-later

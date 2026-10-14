@@ -222,6 +222,53 @@ pruefe(
         . ' res6b=' . var_export($res6b, true)
 );
 
+// ── 7) Der falsche Satz zum Secure-Flag steht nicht mehr da ─────────────
+// Bis 1.2.0 hieß es, $_SERVER['HTTPS'] = 'on' sorge für das Secure-Flag am
+// Sitzungscookie. Das stimmt nicht: Die Flags setzt allein
+// session_set_cookie_params() in WebUntisSession::start(). Gesucht werden
+// die bekannten falschen Fassungen, im ganzen Baum (git ls-files), ohne:
+//   - CHANGELOG.md, der sie zitiert,
+//   - FALLSTRICKE.md / REIHENREGELN.md, vendorte Kopien aus koordination
+//     (Berichtigung dort, Verteilung ist ein eigener Lauf),
+//   - diese Datei, die die Suchmuster trägt.
+$falscheFassungen = [
+    'php setzt secure-cookie-flag',
+    'und der secure-flag fehlt',
+    'setzt php keinen secure-cookie-flag',
+    'funktioniert mit prepare() oben',
+    'php denkt sonst die verbindung sei unsicher',
+];
+$ausgenommen = ['CHANGELOG.md', 'FALLSTRICKE.md', 'REIHENREGELN.md', 'tests/' . basename(__FILE__)];
+$wurzel      = dirname(__DIR__);
+$liste       = [];
+$rc          = 0;
+exec('git -C ' . escapeshellarg($wurzel) . ' ls-files', $liste, $rc);
+$durchsucht = [];
+$funde      = [];
+foreach ($liste as $datei) {
+    if ($rc !== 0 || in_array($datei, $ausgenommen, true)) continue;
+    if (!preg_match('/\.(php|md)$/', $datei)) continue;
+    $text = file_get_contents($wurzel . '/' . $datei);
+    if ($text === false) continue;
+    // Kommentarzeichen und Auszeichnung entfernen, Leerraum zusammenziehen:
+    // Ein Satz über zwei Kommentarzeilen soll wie einer gelesen werden.
+    $text = preg_replace('~^\s*(\*|//)\s?~m', '', $text);
+    $text = str_replace(['`', '→'], ['', ' '], $text);
+    $text = strtolower(preg_replace('/\s+/', ' ', $text));
+    $durchsucht[] = $datei;
+    foreach ($falscheFassungen as $fassung) {
+        if (str_contains($text, $fassung)) $funde[] = "{$datei}: „{$fassung}“";
+    }
+}
+// Ohne Voraussetzung kein Bestehen: Die Suche muss die Datei sehen, in der
+// der Satz stand.
+$voraussetzung = $rc === 0 && in_array('src/WebUntisSession.php', $durchsucht, true);
+pruefe(
+    '7) kein falscher Satz „HTTPS sorgt für Secure-Flag“ (' . count($durchsucht) . ' Dateien durchsucht)',
+    $voraussetzung && $funde === [],
+    $voraussetzung ? implode('; ', $funde) : 'git ls-files gescheitert oder src/WebUntisSession.php nicht durchsucht'
+);
+
 echo "\nPrüfungen: {$gesamt}, bestanden: {$bestanden}\n";
 
 exit($bestanden === $gesamt ? 0 : 1);

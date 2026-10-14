@@ -120,14 +120,21 @@ WebUntisSession::prepare('mein_session');
 `session_name()`. Wird er zu spät gesetzt, sucht PHP nach dem
 Standard-Cookie-Namen `PHPSESSID` und findet die Session nicht.
 
-### 2. SSL-Proxy (Uberspace, nginx)
+### 2. Cookie-Flags (Secure, HttpOnly, SameSite)
 
-PHP built-in Server läuft intern über HTTP, auch wenn Uberspace/nginx
-nach außen HTTPS macht. Ohne `$_SERVER['HTTPS'] = 'on'` setzt PHP
-keinen `Secure`-Cookie-Flag – moderne Browser verwerfen solche Cookies
-auf HTTPS-Seiten.
+Ob das Sitzungscookie geschützt ist, entscheidet **allein**
+`session_set_cookie_params()` – `secure`, `httponly` und `samesite`
+ausdrücklich. `WebUntisSession::start()` setzt alle drei
+(`SameSite=Lax`). `$_SERVER['HTTPS']` hat darauf **keinen Einfluss**,
+auch hinter einem SSL-Proxy (Uberspace, nginx) nicht.
 
-`WebUntisSession::prepare()` setzt `$_SERVER['HTTPS'] = 'on'` automatisch.
+Wer `start()` umgeht und `session_start()` selbst aufruft, bekommt ein
+Cookie mit nur `path=/`. **Belegt wird es am Betrieb**, nicht am Code:
+Die Antwortkopfzeile `Set-Cookie` muss alle drei Flags zeigen.
+
+**`Lax`, nicht `Strict`:** `Strict` schickt das Cookie bei einem Link
+von außen nicht mit, und wer von der Startseite kommt, steht abgemeldet
+da.
 
 ### 3. `empty(0)` ist `true`
 

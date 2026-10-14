@@ -9,10 +9,19 @@
  * WICHTIG – Aufruf-Reihenfolge im Router:
  * ----------------------------------------
  * WebUntisSession::prepare() MUSS ganz oben im Router stehen,
- * vor jedem require/include. Grund: session_name() und
- * $_SERVER['HTTPS'] müssen vor dem ersten session_start()
- * gesetzt werden, sonst liest PHP den Cookie-Namen falsch
- * und der Secure-Flag fehlt (kritisch bei SSL-Proxy wie Uberspace).
+ * vor jedem require/include. Grund: session_name() muss vor dem
+ * ersten Sitzungszugriff gesetzt werden, sonst liest PHP den
+ * Cookie-Namen falsch und findet die Sitzung nicht wieder.
+ *
+ * COOKIE-FLAGS:
+ * -------------
+ * Ob das Sitzungscookie geschützt ist, entscheidet allein
+ * session_set_cookie_params() in start() – secure, httponly und
+ * samesite ausdrücklich. $_SERVER['HTTPS'] hat darauf keinen
+ * Einfluss, auch hinter einem SSL-Proxy nicht. Wer start() umgeht
+ * und session_start() selbst ruft, bekommt ein Cookie ohne alle
+ * drei Flags. Belegt wird es am Betrieb, nicht am Code: Die
+ * Antwortkopfzeile Set-Cookie muss alle drei zeigen.
  *
  * Empfohlene router.php:
  *   <?php
@@ -39,17 +48,20 @@ class WebUntisSession
      * Muss GANZ OBEN im Router aufgerufen werden – vor jedem require.
      *
      * Setzt:
-     *   - $_SERVER['HTTPS'] = 'on'  → PHP setzt Secure-Cookie-Flag
      *   - session_name()            → PHP liest richtigen Cookie-Namen
+     *   - $_SERVER['HTTPS'] = 'on'  → wirkt NICHT auf die Cookie-Flags
+     *                                 (die setzt allein start()); nur für
+     *                                 Code, der die Variable selbst abfragt
      *
-     * Ohne diesen Aufruf schlägt die Session-Wiederherstellung fehl
-     * wenn der Server hinter einem SSL-Proxy (Uberspace, nginx, etc.) läuft.
+     * Ohne diesen Aufruf vor dem ersten require kann session_name() zu
+     * spät kommen; dann findet PHP die Sitzung nicht wieder.
      *
      * @param string $sessionName  Name des Session-Cookies (Standard: 'app_session')
      */
     public static function prepare(string $sessionName = 'app_session'): void
     {
-        // SSL-Proxy-Flag – PHP denkt sonst die Verbindung sei unsicher
+        // Für Code, der $_SERVER['HTTPS'] selbst abfragt. Auf das
+        // Sitzungscookie wirkt es nicht – das regelt start().
         $_SERVER['HTTPS'] = 'on';
         // Muss vor session_start() gesetzt werden
         session_name($sessionName);
@@ -73,7 +85,7 @@ class WebUntisSession
         session_set_cookie_params([
             'lifetime' => $lifetime,
             'path'     => '/',
-            'secure'   => true,   // Nur HTTPS – funktioniert mit prepare() oben
+            'secure'   => true,   // Nur HTTPS – wirkt allein durch diese Zeile
             'httponly' => true,   // Kein JavaScript-Zugriff
             'samesite' => 'Lax',  // CSRF-Basisschutz
         ]);
