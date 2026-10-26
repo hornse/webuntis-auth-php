@@ -3,14 +3,13 @@
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![PHP: 8.1+](https://img.shields.io/badge/PHP-8.1+-blue.svg)](https://php.net)
 
-**Version:** 1.2.0
+Die Fassung steht am Tag (`git tag`) und im `CHANGELOG.md`.
 
 Wiederverwendbares PHP-Modul zur Authentifizierung gegen die WebUntis
 JSON-RPC-API. Unterstützt Lehrkräfte, WebUntis-Administratoren und Schüler.
 Ohne externe Abhängigkeiten – nur PHP 8.1+, PDO und cURL.
 
-Entwickelt an der Friedrich-Rückert-Gymnasium Düsseldorf. Nutzer ist bisher
-keiner – die Anbindung an ein erstes Projekt steht noch aus.
+Entwickelt am Friedrich-Rückert-Gymnasium Düsseldorf.
 
 ---
 
@@ -18,7 +17,8 @@ keiner – die Anbindung an ein erstes Projekt steht noch aus.
 
 - WebUntis JSON-RPC Authentifizierung (Lehrkraft, Admin, Schüler)
 - Automatische Profildaten-Abfrage nach Login (Name, Kürzel, Schild-ID)
-- Brute-Force-Schutz mit konfigurierbarer Sperrzeit
+- Anmeldebremse als eigenständige Klasse: Wartezeit statt Sperre,
+  gezählt nach Kennung, nie nach Adresse
 - Session-Management als eigenständige Klasse
 - Vollständige Uberspace-Kompatibilität (SSL-Proxy, PHP built-in Server)
 - Keine externen Abhängigkeiten (kein Composer nötig)
@@ -31,11 +31,16 @@ keiner – die Anbindung an ein erstes Projekt steht noch aus.
 webuntis-auth-php/
 ├── src/
 │   ├── WebUntisAuth.php      ← Authentifizierung gegen WebUntis-API
-│   └── WebUntisSession.php   ← Session-Management
+│   ├── WebUntisSession.php   ← Session-Management
+│   └── Anmeldebremse.php     ← Bremse, eigenständig vendorbar
+├── sql/
+│   ├── anmeldebremse.mariadb.sql  ← Tabelle der Bremse, MariaDB
+│   └── anmeldebremse.sqlite.sql   ← Tabelle der Bremse, SQLite
+├── tests/
+│   └── alle.sh               ← alle Prüfungen, MariaDB dazu, wenn vorhanden
 ├── examples/
 │   └── router.php            ← Vollständiges Verwendungsbeispiel
 ├── config.example.php        ← Konfigurationsvorlage
-├── migration.sql             ← Datenbank-Migration (Login-Log)
 ├── LICENSE
 └── README.md
 ```
@@ -54,15 +59,18 @@ git submodule add https://github.com/hornse/webuntis-auth-php.git auth
 cp -r webuntis-auth-php/src/ mein-projekt/auth/
 ```
 
-### 2. Datenbank-Migration
+### 2. Tabelle der Bremse (nur wer `Anmeldebremse` nutzt)
 
 ```bash
-# MariaDB/MySQL:
-mysql DATENBANKNAME < migration.sql
+# MariaDB:
+mariadb DATENBANKNAME < sql/anmeldebremse.mariadb.sql
 
-# SQLite (kommentierte Version in migration.sql nutzen):
-sqlite3 datenbank.sqlite < migration.sql
+# SQLite:
+sqlite3 datenbank.sqlite < sql/anmeldebremse.sqlite.sql
 ```
+
+`WebUntisAuth` selbst schreibt nichts in die Datenbank. Ein Protokoll der
+Anmeldungen ist Sache des Projekts.
 
 ### 3. Konfiguration
 
@@ -173,17 +181,45 @@ ID (`schild_id`). Kein manuelles Mapping nötig wenn beide Systeme
 $wu = new WebUntisAuth($pdo, $config['webuntis']);
 
 // Authentifizieren und Profildaten holen
-$result = $wu->authenticate(string $username, string $password, string $ip): ?array;
+$result = $wu->authenticate(string $username, string $password): ?array;
 // null = fehlgeschlagen
 // array = ['personType'=>2, 'personId'=>1013, 'kuerzel'=>'Ho', 'vorname'=>'...', ...]
 
-// Prüfen ob gesperrt
-$gesperrt = $wu->isLocked(string $username): bool;
+// Warum – für Anmeldebremse::abschliessen():
+$ausgang = $wu->ausgang(): ?string;
+// WebUntisAuth::AUSGANG_ERFOLG, _FEHLSCHLAG (jeder Fehlercode von WebUntis,
+// auch die unerlaubte Rolle) oder _OHNE_ENTSCHEID (nicht erreichbar,
+// Zeitüberschreitung, keine JSON-Antwort, HTTP 5xx)
 
 // JSESSIONID der WebUntis-Sitzung – nur mit 'sitzung_offen_halten' => true
 // und nach erfolgreicher Anmeldung, sonst null:
 $cookie = $wu->sessionCookie(): ?string;
 ```
+
+### `Anmeldebremse`
+
+Eigenständig: Ein Projekt vendort nur `src/Anmeldebremse.php` und spielt
+die Tabelle aus `sql/` ein.
+
+```php
+$bremse = new Anmeldebremse(PDO $pdo, array $einstellungen = [], ?Closure $uhr = null);
+// Einstellungen und Voreinstellung: schwelle 8, wartezeit_s 60,
+// fenster_s 900, aufbewahrung_s 604800
+
+$r = $bremse->beginnen(string $kennung, string $ziel = ''): array;
+// ['ergebnis' => Anmeldebremse::ERLAUBT, 'versuch' => 17,   'sekunden' => null]
+// ['ergebnis' => Anmeldebremse::WARTEN,  'versuch' => null, 'sekunden' => 45]
+// ['ergebnis' => Anmeldebremse::FEHLER,  'versuch' => null, 'sekunden' => null]
+
+$bremse->abschliessen(int $versuch, string $ausgang): bool;
+// ERFOLG setzt zurück, FEHLSCHLAG zählt, OHNE_ENTSCHEID zählt nicht.
+// true, wenn der Zustand danach in der Datenbank steht (nachgelesen).
+```
+
+Ab der Schwelle wird zwischen zwei Versuchen gewartet, nie gesperrt.
+Abgewiesene Versuche zählen nicht, laufende zählen mit. **Bekannte
+Grenze:** Ein Skript, das einmal je Minute fehlschlägt, hält eine Kennung
+in der Wartezeit.
 
 ### `WebUntisSession`
 

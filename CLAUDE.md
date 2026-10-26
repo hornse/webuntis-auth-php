@@ -42,10 +42,11 @@ und wird in die Anwendungen **vendored** — kopiert, nicht eingebunden.
 
 | | |
 |---|---|
-| Inhalt | `src/WebUntisAuth.php`, `src/WebUntisSession.php` |
+| Inhalt | `src/WebUntisAuth.php`, `src/WebUntisSession.php`, `src/Anmeldebremse.php` (eigenständig vendorbar) |
+| SQL | `sql/anmeldebremse.mariadb.sql`, `sql/anmeldebremse.sqlite.sql` |
 | Beispiel | `examples/router.php` |
 | Remote | **`origin`**, nicht `github` wie im Rest der Reihe |
-| Testskript | **keines** |
+| Testskript | `tests/alle.sh`; Gegenproben `tests/alle.sh mutationen` |
 | Lizenz | GPL (`LICENSE`) |
 
 ## Drei Dinge, die beim nächsten Mal Zeit sparen
@@ -54,16 +55,16 @@ und wird in die Anwendungen **vendored** — kopiert, nicht eingebunden.
 `github`. Ein Befehl aus dem Gedächtnis (`git push github main`) läuft
 hier ins Leere.
 
-**Es gibt kein Testskript.** Solange das so ist, sind „Ausgangsstand" und
-„erwartete Prüfungszahl" in jedem Auftrag leer. Das ist eine bekannte
-Lücke, keine Nachlässigkeit im Einzelfall — und für ein Repo, aus dem
-vier Anwendungen ihre Anmeldung beziehen, die unangenehmste der Reihe.
+**`tests/alle.sh` startet MariaDB selbst.** Findet es ein `mariadbd`
+(lokal `mariadb@10.11` über Homebrew, wie der Server), läuft ein Server
+zum Wegwerfen im Temp-Verzeichnis, nur über Socket. Ohne steht
+ÜBERSPRUNGEN da, und die Summe ist kleiner — eine kleinere Summe ist
+deshalb erst zu erklären, bevor sie als Rückschritt gilt. Die
+Mutationsserie verlangt MariaDB und ist ohne sie rot.
 
-**Dieses Repo führt keine Tags.** Ein Rückstand einer Kopie lässt sich
-deshalb nur auf ein **Datum** beziehen, nicht auf eine Versionsnummer.
-Belegbar bleibt er, benennbar nicht. `REIHENREGELN.md` verlangt, dass
-eine vergebene Nummer getaggt wird; hier ist das nachzuholen, bevor die
-nächste Nummer vergeben wird.
+**Getaggt wird ab v1.2.1.** Die Fassungen davor (1.0.0 bis 1.2.0) haben
+keinen Tag; ein Rückstand einer Kopie auf eine davon lässt sich nur über
+das Datum belegen.
 
 ## `WebUntisAuth` gibt es zweimal in der Reihe
 

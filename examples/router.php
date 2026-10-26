@@ -16,6 +16,7 @@ WebUntisSession::prepare('mein_projekt_session'); // Cookie-Name anpassen
 // ── SCHRITT 2: Konfiguration und Auth laden ─────────────────────────────────
 $config = require __DIR__ . '/../config.php';
 require_once __DIR__ . '/../src/WebUntisAuth.php';
+require_once __DIR__ . '/../src/Anmeldebremse.php';
 
 // ── SCHRITT 3: Routing ──────────────────────────────────────────────────────
 $uri    = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
@@ -37,7 +38,6 @@ if (str_starts_with($uri, '/api/')) {
         $body     = json_decode(file_get_contents('php://input'), true) ?? [];
         $username = trim($body['username'] ?? $body['email'] ?? '');
         $pass     = $body['password']      ?? $body['passwort'] ?? '';
-        $ip       = $_SERVER['REMOTE_ADDR'] ?? 'unbekannt';
 
         if (!$username || !$pass) {
             http_response_code(400);
@@ -68,10 +68,31 @@ if (str_starts_with($uri, '/api/')) {
         $pdo = $pdo ?? new PDO('mysql:host=127.0.0.1;dbname=meine_datenbank;charset=utf8mb4',
                                $config['db']['user'], $config['db']['pass'],
                                [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
-        $wu = new WebUntisAuth($pdo, $config['webuntis']);
 
-        $result = $wu->authenticate($username, $pass, $ip);
+        // Bremse: erst eintragen und zählen, dann WebUntis fragen.
+        $bremse  = new Anmeldebremse($pdo);
+        $versuch = $bremse->beginnen($username, 'anwendung');
+        if ($versuch['ergebnis'] === Anmeldebremse::WARTEN) {
+            http_response_code(429);
+            echo json_encode(['error' => "Zu viele Fehlversuche. Bitte noch {$versuch['sekunden']} Sekunden warten."]);
+            exit;
+        }
+        if ($versuch['ergebnis'] === Anmeldebremse::FEHLER) {
+            http_response_code(503);
+            echo json_encode(['error' => 'Die Anmeldung ist gerade nicht möglich. Bitte in ein paar Minuten noch einmal.']);
+            exit;
+        }
 
+        $wu     = new WebUntisAuth($pdo, $config['webuntis']);
+        $result = $wu->authenticate($username, $pass);
+        $bremse->abschliessen($versuch['versuch'], $wu->ausgang());
+
+        if ($wu->ausgang() === WebUntisAuth::AUSGANG_OHNE_ENTSCHEID) {
+            // Hier hat kein Passwort entschieden – das darf man sagen.
+            http_response_code(503);
+            echo json_encode(['error' => 'WebUntis ist gerade nicht erreichbar.']);
+            exit;
+        }
         if ($result === null) {
             http_response_code(401);
             echo json_encode(['error' => 'Ungültige Anmeldedaten.']);

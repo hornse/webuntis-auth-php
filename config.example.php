@@ -33,10 +33,6 @@ return [
         'connect_timeout' => 5,  // Sekunden
         'timeout'         => 10, // Sekunden
 
-        // ── Brute-Force-Schutz ───────────────────────────────────────────────
-        'max_failed_logins' => 5,  // Versuche bevor gesperrt
-        'lockout_minutes'   => 15, // Sperrzeit in Minuten
-
         // ── Sitzung offenhalten ──────────────────────────────────────────────
         // Im Normalfall aus: authenticate() meldet die WebUntis-Sitzung nach
         // dem Holen der Profildaten selbst wieder ab. Nur einschalten, wenn

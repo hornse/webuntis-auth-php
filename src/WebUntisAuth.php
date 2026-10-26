@@ -19,7 +19,7 @@
  * ----------------------------------------
  * Dieses Modul ist bewusst projektunabhängig gehalten.
  * Es benötigt nur:
- *   - Eine PDO-Datenbankverbindung (MariaDB/MySQL oder SQLite)
+ *   - Eine PDO-Datenbankverbindung (nur für lookupNameFromDb())
  *   - Ein Config-Array (siehe config.example.php)
  *   - PHP 8.1+ mit cURL und PDO
  *
@@ -37,6 +37,11 @@
  *   - session_name() muss im Router ganz oben stehen (vor jedem
  *     require) – siehe WebUntisSession::prepare(). Die Cookie-Flags
  *     setzt allein WebUntisSession::start(), nicht $_SERVER['HTTPS'].
+ *
+ * ANMELDEBREMSE:
+ *   Dieses Modul bremst nicht und protokolliert nicht. Wer eine Bremse
+ *   will, nimmt src/Anmeldebremse.php; ausgang() sagt nach
+ *   authenticate(), womit der Versuch dort abzuschließen ist.
  *
  * Copyright (C) 2026 Sebastian Horn, Friedrich-Rückert-Gymnasium Düsseldorf
  * SPDX-License-Identifier: GPL-3.0-or-later
@@ -57,11 +62,22 @@ class WebUntisAuth
     /** Interner Session-Cookie für Folgeaufrufe nach authenticate */
     private string $sessionCookie = '';
 
+    // ── Ausgang einer Anmeldung – dieselben Namen wie in Anmeldebremse ──────
+    public const AUSGANG_ERFOLG         = 'erfolg';
+    public const AUSGANG_FEHLSCHLAG     = 'fehlschlag';
+    public const AUSGANG_OHNE_ENTSCHEID = 'ohne_entscheid';
+
     /** Ob authenticate() die WebUntis-Sitzung im Erfolgsfall offenlässt */
     private readonly bool $sitzungOffenHalten;
 
+    /** Ausgang des letzten authenticate(), null davor */
+    private ?string $ausgang = null;
+
+    /** Ob der letzte jsonRpc() an einem Transportfehler scheiterte */
+    private bool $transportfehler = false;
+
     /**
-     * @param PDO   $db      Datenbankverbindung (für Login-Log und Brute-Force)
+     * @param PDO   $db      Datenbankverbindung (nur für lookupNameFromDb())
      * @param array $config  WebUntis-Konfiguration (siehe config.example.php)
      */
     public function __construct(
@@ -90,21 +106,16 @@ class WebUntisAuth
      *    'vorname'=>'Max', 'nachname'=>'Mustermann']
      *   → key entspricht der Schild-ID
      *
+     * Warum es null wurde, sagt danach ausgang(). Nach außen bleibt die
+     * Ablehnung einheitlich – das ist Sache des Aufrufers.
+     *
      * @return array|null  null = Login fehlgeschlagen
      */
-    public function authenticate(string $username, string $password, string $ip): ?array
+    public function authenticate(string $username, string $password): ?array
     {
+        $this->ausgang = self::AUSGANG_OHNE_ENTSCHEID;
         $username = trim($username);
         if ($username === '' || $password === '') return null;
-
-        // Brute-Force-Schutz
-        if ($this->tooManyAttempts($username)) {
-            // Fehlversuch: log() entscheidet nichts, da hier ohnehin
-            // abgewiesen wird – aber genau das ist der Fehlversuch, den die
-            // Bremse für ihre Zählung braucht.
-            $this->log($username, false, 'zu_viele_versuche', $ip);
-            return null;
-        }
 
         // WebUntis-Login – Cookie aus Response-Header speichern
         $authResponse = $this->jsonRpc('authenticate', [
@@ -114,12 +125,12 @@ class WebUntisAuth
         ], saveCookie: true);
 
         if ($authResponse === null || isset($authResponse['error'])) {
-            // Fehlversuch ist hier Voraussetzung, nicht nur Protokoll: lässt
-            // er sich nicht eintragen, wird trotzdem abgewiesen (siehe
-            // log()) – anders als beim Erfolg weiter unten.
-            if (!$this->log($username, false, 'falsches_passwort_oder_netzwerk', $ip)) {
-                return null;
-            }
+            // Ohne Entscheid nur bei einem Transportfehler. Jede Antwort mit
+            // einem Fehlercode ist ein Fehlschlag, auch ein unbekannter – im
+            // Zweifel zählt der Versuch.
+            $this->ausgang = ($authResponse === null && $this->transportfehler)
+                ? self::AUSGANG_OHNE_ENTSCHEID
+                : self::AUSGANG_FEHLSCHLAG;
             return null;
         }
 
@@ -134,7 +145,7 @@ class WebUntisAuth
             // abgewiesene Anmeldung darf keine Sitzung hinterlassen.
             $this->jsonRpc('logout', []);
             $this->sessionCookie = '';
-            $this->log($username, false, 'falsche_rolle', $ip); // Fehlversuch – wird so oder so abgewiesen
+            $this->ausgang = self::AUSGANG_FEHLSCHLAG;
             return null;
         }
 
@@ -146,19 +157,25 @@ class WebUntisAuth
             $this->jsonRpc('logout', []);
             $this->sessionCookie = '';
         }
-        // Erfolg: der Eintrag ist Protokoll, keine Voraussetzung – scheitert
-        // er, wird trotzdem durchgelassen (anders als beim Fehlversuch oben).
-        $this->log($username, true, null, $ip);
+        $this->ausgang = self::AUSGANG_ERFOLG;
 
         return $details;
     }
 
     /**
-     * Prüft ob ein Benutzername durch zu viele Fehlversuche gesperrt ist.
+     * Ausgang des letzten authenticate() – passend zu
+     * Anmeldebremse::abschliessen():
+     *   AUSGANG_ERFOLG          angemeldet
+     *   AUSGANG_FEHLSCHLAG      WebUntis hat abgelehnt (jeder Fehlercode,
+     *                           auch die unerlaubte Rolle, auch HTTP außer 5xx)
+     *   AUSGANG_OHNE_ENTSCHEID  kein Passwort hat entschieden: nicht
+     *                           erreichbar, Zeitüberschreitung, keine
+     *                           JSON-Antwort, HTTP 5xx – oder leere Eingabe
+     * null, solange authenticate() nicht gelaufen ist.
      */
-    public function isLocked(string $username): bool
+    public function ausgang(): ?string
     {
-        return $this->tooManyAttempts(trim($username));
+        return $this->ausgang;
     }
 
     /**
@@ -271,6 +288,7 @@ class WebUntisAuth
      */
     protected function jsonRpc(string $method, array $params, bool $saveCookie = false): ?array
     {
+        $this->transportfehler = false;
         $baseUrl = rtrim($this->config['base_url'], '/');
 
         if (!str_starts_with($baseUrl, 'https://')) {
@@ -290,25 +308,20 @@ class WebUntisAuth
             $headers[] = 'Cookie: ' . $this->sessionCookie;
         }
 
-        $ch = curl_init($url);
-        curl_setopt_array($ch, [
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_POST           => true,
-            CURLOPT_POSTFIELDS     => $body,
-            CURLOPT_HTTPHEADER     => $headers,
-            CURLOPT_CONNECTTIMEOUT => $this->config['connect_timeout'] ?? 5,
-            CURLOPT_TIMEOUT        => $this->config['timeout']         ?? 10,
-            CURLOPT_HEADER         => $saveCookie,
-        ]);
+        $antwort    = $this->http($url, $body, $headers, $saveCookie);
+        $raw        = $antwort['raw'];
+        $httpCode   = $antwort['status'];
+        $headerSize = $antwort['kopfgroesse'];
 
-        $raw        = curl_exec($ch);
-        $httpCode   = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        $headerSize = curl_getinfo($ch, CURLINFO_HEADER_SIZE);
-        $curlErr    = curl_error($ch);
-        curl_close($ch);
-
-        if ($raw === false) {
-            error_log("WebUntisAuth: cURL-Fehler bei {$method}: {$curlErr}");
+        // Transportfehler: Hier hat WebUntis über nichts entschieden.
+        if ($raw === false || $antwort['errno'] !== 0) {
+            error_log("WebUntisAuth: cURL-Fehler {$antwort['errno']} bei {$method}: {$antwort['fehler']}");
+            $this->transportfehler = true;
+            return null;
+        }
+        if ($httpCode >= 500 && $httpCode <= 599) {
+            error_log("WebUntisAuth: HTTP {$httpCode} bei {$method}");
+            $this->transportfehler = true;
             return null;
         }
         if ($httpCode !== 200) {
@@ -328,61 +341,40 @@ class WebUntisAuth
         $decoded = json_decode($raw, true);
         if (!is_array($decoded)) {
             error_log("WebUntisAuth: Ungültige JSON-Antwort bei {$method}");
+            $this->transportfehler = true;
             return null;
         }
 
         return $decoded;
     }
 
-    // ── Brute-Force-Schutz ──────────────────────────────────────────────────
-
     /**
-     * Prüft ob zu viele Fehlversuche in kurzer Zeit vorliegen.
-     * Erfordert Tabelle 'webuntis_login_log' (siehe migration.sql).
-     */
-    private function tooManyAttempts(string $username): bool
-    {
-        $max     = $this->config['max_failed_logins'] ?? 5;
-        $minutes = $this->config['lockout_minutes']   ?? 15;
-
-        $seit = (new \DateTimeImmutable("-{$minutes} minutes"))->format('Y-m-d H:i:s');
-
-        try {
-            $stmt = $this->db->prepare(
-                'SELECT COUNT(*) FROM webuntis_login_log
-                 WHERE benutzername = ? AND erfolgreich = 0
-                   AND zeitpunkt >= ?'
-            );
-            $stmt->execute([$username, $seit]);
-            return (int)$stmt->fetchColumn() >= $max;
-        } catch (\Throwable $e) {
-            error_log('WebUntisAuth Bremse: ' . $e->getMessage());
-            return true; // Voraussetzung fehlt → im Zweifel abweisen
-        }
-    }
-
-    /**
-     * Protokolliert einen Login-Versuch.
+     * Der HTTP-Austausch, sonst nichts. Eigene Methode, damit eine Prüfung
+     * die Auswertung in jsonRpc() mit nachgebauten Antworten fahren kann.
      *
-     * Ein Fehlversuch ist für die Bremse Voraussetzung, nicht nur Protokoll:
-     * lässt er sich nicht eintragen, zählt tooManyAttempts() ins Leere.
-     * Deshalb weist der Aufrufer bei einem Fehlversuch ab, wenn hier `false`
-     * zurückkommt. Ein erfolgreicher Login dagegen wird nur protokolliert –
-     * scheitert der Eintrag, ändert das nichts am Ausgang der Anmeldung.
-     *
-     * @return bool  Ob der Eintrag gelungen ist.
+     * @return array{raw: string|false, status: int, kopfgroesse: int, errno: int, fehler: string}
      */
-    private function log(string $username, bool $ok, ?string $grund, string $ip): bool
+    protected function http(string $url, string $body, array $headers, bool $mitKopf): array
     {
-        try {
-            $this->db->prepare(
-                'INSERT INTO webuntis_login_log (benutzername, erfolgreich, grund, ip)
-                 VALUES (?, ?, ?, ?)'
-            )->execute([$username, $ok ? 1 : 0, $grund, $ip]);
-            return true;
-        } catch (\Throwable $e) {
-            error_log('WebUntisAuth log: ' . $e->getMessage());
-            return false;
-        }
+        $ch = curl_init($url);
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_POST           => true,
+            CURLOPT_POSTFIELDS     => $body,
+            CURLOPT_HTTPHEADER     => $headers,
+            CURLOPT_CONNECTTIMEOUT => $this->config['connect_timeout'] ?? 5,
+            CURLOPT_TIMEOUT        => $this->config['timeout']         ?? 10,
+            CURLOPT_HEADER         => $mitKopf,
+        ]);
+
+        $antwort = [
+            'raw'         => curl_exec($ch),
+            'status'      => (int)curl_getinfo($ch, CURLINFO_HTTP_CODE),
+            'kopfgroesse' => (int)curl_getinfo($ch, CURLINFO_HEADER_SIZE),
+            'errno'       => curl_errno($ch),
+            'fehler'      => curl_error($ch),
+        ];
+        curl_close($ch);
+        return $antwort;
     }
 }
