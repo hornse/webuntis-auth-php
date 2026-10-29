@@ -278,7 +278,9 @@ pruefe('A16) zweiter Aufruf erbt keinen Transportfehler des ersten', $erst === '
 //   - CHANGELOG.md, der sie zitiert,
 //   - FALLSTRICKE.md / REIHENREGELN.md, vendorte Kopien aus koordination
 //     (Berichtigung dort, Verteilung ist ein eigener Lauf),
-//   - diese Datei, die die Suchmuster trägt.
+//   - diese Datei, die die Suchmuster trägt,
+//   - tests/mutationen.php, das einen der Sätze als Gegenprobe zu dieser
+//     Prüfung einsetzt (bis 2.0.0 nicht ausgenommen: v2.0.0 ist rot).
 $falscheFassungen = [
     'php setzt secure-cookie-flag',
     'und der secure-flag fehlt',
@@ -286,7 +288,7 @@ $falscheFassungen = [
     'funktioniert mit prepare() oben',
     'php denkt sonst die verbindung sei unsicher',
 ];
-$ausgenommen = ['CHANGELOG.md', 'FALLSTRICKE.md', 'REIHENREGELN.md', 'tests/' . basename(__FILE__)];
+$ausgenommen = ['CHANGELOG.md', 'FALLSTRICKE.md', 'REIHENREGELN.md', 'tests/' . basename(__FILE__), 'tests/mutationen.php'];
 $wurzel      = dirname(__DIR__);
 $liste       = [];
 $rc          = 0;

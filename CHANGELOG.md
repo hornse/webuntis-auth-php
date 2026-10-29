@@ -2,6 +2,25 @@
 
 Nennenswerte Änderungen an diesem Modul, mit Begründung wo nötig.
 
+## [2.0.1] – 2026-10-29
+
+**Berichtigung der Prüfung, keine Änderung am Code.**
+
+- **v2.0.0 ist als getaggter Stand rot: 63 von 64.** Prüfung 7 (kein
+  falscher Satz zum Secure-Flag) durchsucht die Dateien aus
+  `git ls-files`, und `tests/mutationen.php` setzt einen dieser Sätze als
+  Gegenprobe zu Prüfung 7 ein. Die Suite wurde vor dem Commit gemessen,
+  als die Datei noch nicht verfolgt war – die genannten 64/64 galten für
+  den Arbeitsbaum, nicht für den getaggten Stand. Der Tag `v2.0.0` bleibt
+  unverändert.
+- `tests/WebUntisAuthTest.php`: `tests/mutationen.php` steht in der
+  Ausnahmeliste von Prüfung 7, aus demselben Grund wie die Suite selbst.
+- `tests/mutationen.php`: zwei Gegenproben dazu – ohne die Ausnahme wird
+  Prüfung 7 rot, und derselbe Satz in einer anderen Testdatei macht sie
+  weiterhin rot (die Ausnahme ist nicht breiter als diese eine Datei).
+- Prüfungen: 64 (mit MariaDB), gemessen auf dem committeten Stand in
+  sauberem Baum. Mutationen: 49 → 51.
+
 ## [2.0.0] – 2026-10-26
 
 **Bricht die Schnittstelle.** Die Sperre in `WebUntisAuth` ist entfernt.

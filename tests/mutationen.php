@@ -121,6 +121,10 @@ $m[] = [AUTH, 'public function authenticate(string $username, string $password):
               "public function authenticate(string \$username, string \$password, string \$ip = ''): ?array", SA, $fail('A15')];
 $m[] = [AUTH, "\$this->transportfehler = false;\n        \$baseUrl", '$baseUrl', SA, $fail('A16')];
 $m[] = ['README.md', '## Bekannte Fallstricke', "## Bekannte Fallstricke\n\nOhne HTTPS setzt PHP keinen `Secure`-Cookie-Flag.", SA, $fail('7')];
+// Die Ausnahme für diese Datei trägt die Prüfung (ohne sie wäre 7 rot) …
+$m[] = [SA, ", 'tests/mutationen.php'];", '];', SA, $fail('7')];
+// … und ist nicht breiter als diese Datei: In einer anderen Testdatei schlägt 7 an.
+$m[] = [SB, "declare(strict_types=1);\n", "declare(strict_types=1);\n// Ohne HTTPS setzt PHP keinen Secure-Cookie-Flag.\n", SA, $fail('7')];
 
 // ── Lauf ─────────────────────────────────────────────────────────────────
 /** Beschriftung einer Prüfung aus der Suite – muss genau einmal dastehen. */
