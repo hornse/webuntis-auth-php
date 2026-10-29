@@ -44,7 +44,11 @@
  * die Sekunden. Sie protokolliert keine Kennung.
  *
  * Copyright (C) 2026 Sebastian Horn, Friedrich-Rückert-Gymnasium Düsseldorf
- * SPDX-License-Identifier: GPL-3.0-or-later
+ * SPDX-License-Identifier: GPL-2.0-or-later
+ *
+ * Abweichend vom übrigen Modul (GPL-3.0-or-later) steht diese Datei unter
+ * GPL-2.0-or-later, damit sie auch in GPL-2-Projekten laufen kann. Die
+ * GPL-3.0 bleibt damit wählbar. Text der GPL-2.0: LICENSE-GPL-2.0.
  */
 
 declare(strict_types=1);

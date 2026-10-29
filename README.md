@@ -42,6 +42,7 @@ webuntis-auth-php/
 │   └── router.php            ← Vollständiges Verwendungsbeispiel
 ├── config.example.php        ← Konfigurationsvorlage
 ├── LICENSE
+├── LICENSE-GPL-2.0           ← Text der GPL-2.0, für src/Anmeldebremse.php
 └── README.md
 ```
 
@@ -264,3 +265,4 @@ WebUntisSession::logout(): void;
 
 Copyright (C) 2026 Sebastian Horn, Friedrich-Rückert-Gymnasium Düsseldorf
 GNU General Public License v3.0 – Details siehe [LICENSE](LICENSE).
+`src/Anmeldebremse.php` steht abweichend unter GPL-2.0-or-later, damit sie auch in GPL-2-Projekten laufen kann – Text der GPL-2.0 siehe [LICENSE-GPL-2.0](LICENSE-GPL-2.0).

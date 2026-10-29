@@ -2,6 +2,20 @@
 
 Nennenswerte Änderungen an diesem Modul, mit Begründung wo nötig.
 
+## [2.0.2] – 2026-10-29
+
+**Lizenz erweitert, keine Änderung am Code.**
+
+- `src/Anmeldebremse.php` steht unter **GPL-2.0-or-later** statt
+  GPL-3.0-or-later; der Urheber stellt sie dafür frei, damit sie auch in
+  GPL-2-Projekten laufen kann. Die GPL-3.0 bleibt wählbar. Geändert ist
+  nur der Dateikopf; die Prüfsumme der Datei ohne Kopf ist dieselbe wie in
+  2.0.1 (SHA-256 `edd663a1…7492edbfe`).
+- Neu `LICENSE-GPL-2.0`: der Text der GPL-2.0, wie ihn gnu.org ausliefert
+  (`old-licenses/gpl-2.0.txt`, abgerufen 2026-10-29).
+- Alle anderen Dateien bleiben unter GPL-3.0-or-later (`LICENSE`).
+- Prüfungen: 64 (mit MariaDB), unverändert.
+
 ## [2.0.1] – 2026-10-29
 
 **Berichtigung der Prüfung, keine Änderung am Code.**
